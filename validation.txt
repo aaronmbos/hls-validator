@@ -1,0 +1,3 @@
+Notes for validation as I read through the HLS specification.
+
+- The playlist file is a UTF-8 encoded text file.
