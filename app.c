@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdbool.h>
 
 typedef struct
 {
@@ -8,9 +9,53 @@ typedef struct
     int lineCount;
 } HlsManifest;
 
+// While the HLS specification requires UTF-8, it seems rather complex to check for UTF-8 validity.
+// I think this does pretty well for validating byte sequences. It'll do for now.
+bool isValidUtf8(const unsigned char *data, size_t length)
+{
+    size_t i = 0;
+    while (i < length)
+    {
+        unsigned char byte = data[i];
+        if (byte <= 0x7F)
+        {
+            i++;
+        }
+        else if ((byte & 0xE0) == 0xC0)
+        {
+            if (i + 1 >= length || (data[i + 1] & 0xC0) != 0x80)
+            {
+                return false;
+            }
+            i += 2;
+        }
+        else if ((byte & 0xF0) == 0xE0)
+        {
+            if (i + 2 >= length || (data[i + 1] & 0xC0) != 0x80 || (data[i + 2] & 0xC0) != 0x80)
+            {
+                return false;
+            }
+            i += 3;
+        }
+        else if ((byte & 0xF8) == 0xF0)
+        {
+            if (i + 3 >= length || (data[i + 1] & 0xC0) != 0x80 || (data[i + 2] & 0xC0) != 0x80 || (data[i + 3] & 0xC0) != 0x80)
+            {
+                return false;
+            }
+            i += 4;
+        }
+        else
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
 HlsManifest readFileLines(const char *fileName)
 {
-    FILE *file = fopen(fileName, "r");
+    FILE *file = fopen(fileName, "rb");
     if (file == NULL)
     {
         printf("Unable to open file\n");
@@ -26,6 +71,14 @@ HlsManifest readFileLines(const char *fileName)
     {
         // Get rid of the newline character
         buffer[strcspn(buffer, "\n")] = '\0';
+        size_t lineSize = strlen(buffer);
+
+        // Check if the line is valid UTF-8
+        if (!isValidUtf8((unsigned char *)buffer, lineSize))
+        {
+            printf("Invalid UTF-8 sequence found in line: %s\n", buffer);
+            continue;
+        }
 
         char **resizedLines = realloc(lines, (size + 1) * sizeof(char *));
         if (resizedLines == NULL)
@@ -37,7 +90,7 @@ HlsManifest readFileLines(const char *fileName)
         }
         lines = resizedLines;
 
-        lines[size] = malloc(strlen(buffer) + 1);
+        lines[size] = malloc(lineSize + 1);
         if (lines[size] == NULL)
         {
             printf("Error allocating memory for line in lines\n");
