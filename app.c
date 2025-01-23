@@ -3,11 +3,17 @@
 #include <string.h>
 #include <stdbool.h>
 
+enum PlaylistType
+{
+    MASTER,
+    VARIANT
+};
+
 typedef struct
 {
     char **lines;
     int lineCount;
-} HlsManifest;
+} HlsPlaylist;
 
 // While the HLS specification requires UTF-8, it seems rather complex to check for UTF-8 validity.
 // I think this does pretty well for validating byte sequences. It'll do for now.
@@ -45,6 +51,11 @@ bool isValidUtf8(const unsigned char *data, size_t length)
             }
             i += 4;
         }
+        // This checks for UTF-8 control characters not including LF and CR
+        else if ((byte >= 0x00 && byte <= 0x1F && byte != 0x0D && byte != 0x0A) || (byte >= 0x7F && byte <= 0x9F))
+        {
+            return false;
+        }
         else
         {
             return false;
@@ -53,13 +64,30 @@ bool isValidUtf8(const unsigned char *data, size_t length)
     return true;
 }
 
-HlsManifest readFileLines(const char *fileName)
+bool hasUtf8Bom(const unsigned char *data, size_t length)
+{
+    // The BOM is 3 bytes
+    if (length < 3)
+    {
+        return false;
+    }
+
+    // Check if the first 3 bytes are 0xEF, 0xBB, 0xBF
+    if (data[0] == 0xEF && data[1] == 0xBB && data[2] == 0xBF)
+    {
+        return true;
+    }
+
+    return false;
+}
+
+HlsPlaylist readFileLines(const char *fileName)
 {
     FILE *file = fopen(fileName, "rb");
     if (file == NULL)
     {
         printf("Unable to open file\n");
-        return (HlsManifest){NULL, 0};
+        return (HlsPlaylist){NULL, 0};
     }
 
     char **lines = NULL;
@@ -72,6 +100,13 @@ HlsManifest readFileLines(const char *fileName)
         // Get rid of the newline character
         buffer[strcspn(buffer, "\n")] = '\0';
         size_t lineSize = strlen(buffer);
+
+        if (lineCount == 0 && hasUtf8Bom((unsigned char *)buffer, lineSize))
+        {
+            printf("Input file contains UTF-8 BOM. This is not supported by the HLS specification. Please remove the BOM from the input file.\n");
+            fclose(file);
+            return (HlsPlaylist){NULL, 0};
+        }
 
         // Check if the line is valid UTF-8
         if (!isValidUtf8((unsigned char *)buffer, lineSize))
@@ -86,7 +121,7 @@ HlsManifest readFileLines(const char *fileName)
             printf("Failed to reallocate space for new line\n");
             free(lines);
             fclose(file);
-            return (HlsManifest){NULL, 0};
+            return (HlsPlaylist){NULL, 0};
         }
         lines = resizedLines;
 
@@ -100,7 +135,7 @@ HlsManifest readFileLines(const char *fileName)
             }
             free(lines);
             fclose(file);
-            return (HlsManifest){NULL, 0};
+            return (HlsPlaylist){NULL, 0};
         }
         strcpy(lines[size], buffer);
 
@@ -109,31 +144,31 @@ HlsManifest readFileLines(const char *fileName)
     }
 
     fclose(file);
-    return (HlsManifest){lines, lineCount};
+    return (HlsPlaylist){lines, lineCount};
 }
 
 int main(int argc, char const *argv[])
 {
-    HlsManifest manifest = readFileLines("files/test.m3u8");
+    HlsPlaylist playlist = readFileLines("files/test.m3u8");
 
-    if (manifest.lines == NULL)
+    if (playlist.lines == NULL)
     {
         fprintf(stderr, "Failed to read file\n");
         return 1;
     }
 
-    printf("Read %d lines from the file:\n", manifest.lineCount);
-    for (int i = 0; i < manifest.lineCount; i++)
+    printf("Read %d lines from the file:\n", playlist.lineCount);
+    for (int i = 0; i < playlist.lineCount; i++)
     {
-        printf("%s\n", manifest.lines[i]);
+        printf("%s\n", playlist.lines[i]);
     }
 
     // Free the memory allocated for the lines
-    for (int i = 0; i < manifest.lineCount; i++)
+    for (int i = 0; i < playlist.lineCount; i++)
     {
-        free(manifest.lines[i]);
+        free(playlist.lines[i]);
     }
-    free(manifest.lines);
+    free(playlist.lines);
 
     return 0;
 }
