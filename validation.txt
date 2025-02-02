@@ -18,3 +18,9 @@ Playlists
 - Playlist files must be UTF-8 encoded
   - The UTF-8 BOM must not be present
   - UTF-8 control characters must not be present, except for LF and CR
+- Playlist lines are terminated by either a single LF or a CR followed by LF
+- A playlist line can be:
+  - A comment
+  - A tag
+  - A URI
+  - Blank

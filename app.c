@@ -9,9 +9,24 @@ enum PlaylistType
     VARIANT
 };
 
+typedef enum
+{
+    COMMENT,
+    URI,
+    BLANK,
+    TAG
+} LineType;
+
 typedef struct
 {
-    char **lines;
+    unsigned int index;
+    LineType type;
+    char *value;
+} Line;
+
+typedef struct
+{
+    Line **lines;
     int lineCount;
 } HlsPlaylist;
 
@@ -90,13 +105,30 @@ HlsPlaylist readFileLines(const char *fileName)
         return (HlsPlaylist){NULL, 0};
     }
 
-    char **lines = NULL;
+    Line **lines = NULL;
     size_t size = 0;
     int lineCount = 0;
 
     char buffer[1024];
     while (fgets(buffer, sizeof(buffer), file))
     {
+        lineCount++;
+
+        LineType lineType = BLANK;
+        // Blank lines are ignored
+        if (strlen(buffer) == 0)
+        {
+            lineType = BLANK;
+            continue;
+        }
+
+        if (buffer[strlen(buffer) - 1] != '\n')
+        {
+            printf("Invalid line ending. Lines must end with a newline character.\n");
+            fclose(file);
+            return (HlsPlaylist){NULL, 0};
+        }
+
         // Get rid of the newline character
         buffer[strcspn(buffer, "\n")] = '\0';
         size_t lineSize = strlen(buffer);
@@ -115,7 +147,16 @@ HlsPlaylist readFileLines(const char *fileName)
             continue;
         }
 
-        char **resizedLines = realloc(lines, (size + 1) * sizeof(char *));
+        if (buffer[0] == '#' && (buffer[1] != 'E' && buffer[2] != 'X' && buffer[3] != 'T'))
+        {
+            lineType = COMMENT;
+        }
+        else
+        {
+            lineType = URI;
+        }
+
+        Line **resizedLines = realloc(lines, (size + 1) * sizeof(Line *));
         if (resizedLines == NULL)
         {
             printf("Failed to reallocate space for new line\n");
@@ -137,7 +178,12 @@ HlsPlaylist readFileLines(const char *fileName)
             fclose(file);
             return (HlsPlaylist){NULL, 0};
         }
-        strcpy(lines[size], buffer);
+
+        Line *line = malloc(sizeof(Line));
+        line->value = strdup(buffer);
+        line->index = lineCount - 1;
+        line->type = lineType;
+        lines[size] = line;
 
         size++;
         lineCount++;
@@ -160,12 +206,13 @@ int main(int argc, char const *argv[])
     printf("Read %d lines from the file:\n", playlist.lineCount);
     for (int i = 0; i < playlist.lineCount; i++)
     {
-        printf("%s\n", playlist.lines[i]);
+        printf("%s\n", playlist.lines[i]->value);
     }
 
     // Free the memory allocated for the lines
     for (int i = 0; i < playlist.lineCount; i++)
     {
+        free(playlist.lines[i]->value);
         free(playlist.lines[i]);
     }
     free(playlist.lines);
