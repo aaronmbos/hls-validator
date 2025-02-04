@@ -1,6 +1,9 @@
-Notes for validation as I read through the HLS specification.
+# Validation Notes
 
-Media Segments
+_Notes for validation as I read through the HLS specification._
+
+## Media Segments
+
 - Playlist media segments are specified by a URI and optionally a byte range.
 - The duration of each segment is provided by the EXTINF tag.
 - Each segment in the playlist has a unique media sequence number
@@ -13,7 +16,8 @@ Media Segments
   - Packed Audio
   - WebVTT (Web Video Text Tracks)
 
-Playlists
+## Playlists
+
 - The playlist file must have the .m3u8 or .m3u extension OR have the HTTP Content-Type header set to application/vnd.apple.mpegurl or audio/mpegurl.
 - Playlist files must be UTF-8 encoded
   - The UTF-8 BOM must not be present
